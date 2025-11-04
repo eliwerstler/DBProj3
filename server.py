@@ -13,6 +13,7 @@ import os
 from sqlalchemy import *
 from sqlalchemy.pool import NullPool
 from flask import Flask, request, render_template, g, redirect, Response, abort
+from urllib.parse import quote_plus
 
 tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask(__name__, template_folder=tmpl_dir)
@@ -31,7 +32,7 @@ app = Flask(__name__, template_folder=tmpl_dir)
 #
 # Modify these with your own credentials you received from TA!
 DATABASE_USERNAME = "pjm2188"
-DATABASE_PASSWRD = "Peterpeter01!"
+DATABASE_PASSWRD = quote_plus("Peterpeter01!")
 DATABASE_HOST = "34.139.8.30"
 DATABASEURI = f"postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWRD}@{DATABASE_HOST}/proj1part2"
 
