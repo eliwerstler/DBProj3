@@ -210,13 +210,8 @@ def recipes():
         cursor.close()
     except Exception as e:
         return f"<h3>Error querying recipes:</h3><pre>{e}</pre>"
+    return render_template("recipes.html", rows=rows)
 
-    html = "<h2>Recipes</h2><table border=1 cellpadding=4>"
-    html += "<tr><th>ID</th><th>Name</th><th>Portion</th><th>Source</th></tr>"
-    for r in rows:
-        html += f"<tr><td>{r.recipe_id}</td><td>{r.recipe_name}</td><td>{r.portion_size}</td><td>{r.source}</td></tr>"
-    html += "</table><p><a href='/'>Home</a></p>"
-    return html
 
 
 @app.route('/households')
@@ -227,44 +222,93 @@ def households():
         cursor.close()
     except Exception as e:
         return f"<h3>Error querying households:</h3><pre>{e}</pre>"
+    return render_template("households.html", households=data)
 
-    html = "<h2>Households</h2><ul>"
-    for h in data:
-        html += f"<li>{h.household_name} (ID: {h.household_id})</li>"
-    html += "</ul><p><a href='/'>Home</a></p>"
-    return html
 
 
 @app.route('/inventory')
 def inventory():
     hid = request.args.get('hid')
     try:
-        if not hid:
-            cursor = g.conn.execute(text("SELECT household_id, household_name FROM household"))
-            households = cursor.fetchall()
-            cursor.close()
-            html = "<h2>Select a Household</h2><ul>"
-            for h in households:
-                html += f"<li><a href='/inventory?hid={h.household_id}'>{h.household_name}</a></li>"
-            html += "</ul><p><a href='/'>Home</a></p>"
-            return html
-        else:
-            cursor = g.conn.execute(text("""
+        households = g.conn.execute(text(
+            "SELECT household_id, household_name FROM household ORDER BY household_name"
+        )).fetchall()
+        sel_hid = hid or (str(households[0].household_id) if households else None)
+        items = None
+        if sel_hid:
+            items = g.conn.execute(text("""
                 SELECT i.ingredient_name, hi.quantity, hi.unit
                 FROM household_in_inventory_ingredient hi
                 JOIN ingredient i ON i.ingredient_id = hi.ingredient_id
                 WHERE hi.household_id = :hid
                 ORDER BY i.ingredient_name
-            """), {'hid': hid})
-            items = cursor.fetchall()
-            cursor.close()
-            html = "<h2>Inventory</h2><table border=1><tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>"
-            for item in items:
-                html += f"<tr><td>{item.ingredient_name}</td><td>{item.quantity}</td><td>{item.unit}</td></tr>"
-            html += "</table><p><a href='/inventory'>Back</a> | <a href='/'>Home</a></p>"
-            return html
+            """), {'hid': sel_hid}).fetchall()
     except Exception as e:
         return f"<h3>Error querying inventory:</h3><pre>{e}</pre>"
+    return render_template("inventory.html", households=households, items=items, sel_hid=str(sel_hid) if sel_hid else None)
+
+    
+
+@app.route('/cookable')
+def cookable():
+    try:
+        households = g.conn.execute(text("SELECT household_id, household_name FROM household ORDER BY household_name")).fetchall()
+        sel_hid = request.args.get("hid", str(households[0].household_id) if households else None)
+        rows = []
+        if sel_hid:
+            rows = g.conn.execute(text("""
+                SELECT DISTINCT r.recipe_id, r.recipe_name, r.portion_size
+                FROM recipe r
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM recipe_made_with_ingredient ri
+                    WHERE ri.recipe_id = r.recipe_id
+                      AND ri.ingredient_id NOT IN (
+                          SELECT hi.ingredient_id
+                          FROM household_in_inventory_ingredient hi
+                          WHERE hi.household_id = :hid
+                      )
+                )
+                ORDER BY r.recipe_name
+            """), {'hid': sel_hid}).fetchall()
+    except Exception as e:
+        return f"<h3>Error querying cookable recipes:</h3><pre>{e}</pre>"
+    return render_template("cookable.html", households=households, rows=rows, sel_hid=str(sel_hid) if sel_hid else None)
+
+
+
+@app.route('/mealplans')
+def mealplans():
+    try:
+        plans = g.conn.execute(text("""
+            SELECT mp.plan_id, h.household_name, mp.label
+            FROM meal_plans mp
+            JOIN household h ON h.household_id = mp.household_id
+            ORDER BY h.household_name, mp.label
+        """)).fetchall()
+        sel_pid = request.args.get("pid")
+        groceries = recipes = []
+        if sel_pid:
+            groceries = g.conn.execute(text("""
+                SELECT i.ingredient_name, gci.quantity, gci.unit
+                FROM grocery_list gl
+                JOIN grocery_list_contains_ingredients gci ON gci.grocery_id = gl.grocery_id
+                JOIN ingredient i ON i.ingredient_id = gci.ingredient_id
+                WHERE gl.plan_id = :pid
+                ORDER BY i.ingredient_name
+            """), {'pid': sel_pid}).fetchall()
+            recipes = g.conn.execute(text("""
+                SELECT r.recipe_name
+                FROM meal_plan_selects_recipe mpsr
+                JOIN recipe r ON r.recipe_id = mpsr.recipe_id
+                WHERE mpsr.plan_id = :pid
+                ORDER BY r.recipe_name
+            """), {'pid': sel_pid}).fetchall()
+    except Exception as e:
+        return f"<h3>Error querying meal plans:</h3><pre>{e}</pre>"
+    return render_template("mealplans.html", plans=plans, groceries=groceries, recipes=recipes, sel_pid=str(sel_pid) if sel_pid else None)
+
+
 
 if __name__ == "__main__":
 	import click

@@ -1,0 +1,35 @@
+<html>
+  <style> body{ font-size:15pt; font-family:arial; } </style>
+<body>
+  <h1>Meal Plans</h1>
+
+  <form method="get" action="/mealplans">
+    <label>Plan:</label>
+    <select name="pid" onchange="this.form.submit()">
+      <option value="">-- Select a plan --</option>
+      {% for p in plans %}
+        <option value="{{p.plan_id}}" {{'selected' if sel_pid==p.plan_id|string else ''}}>
+          {{p.household_name}} — {{p.label}}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if recipes %}
+    <h3>Recipes</h3>
+    <ul>{% for r in recipes %}<li>{{r.recipe_name}}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if groceries %}
+    <h3>Grocery List</h3>
+    <table border="1" cellpadding="4">
+      <tr><th>Ingredient</th><th>Qty</th><th>Unit</th></tr>
+      {% for g in groceries %}
+        <tr><td>{{g.ingredient_name}}</td><td>{{g.quantity}}</td><td>{{g.unit}}</td></tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+
+  <p><a href="/">Home</a></p>
+</body>
+</html>

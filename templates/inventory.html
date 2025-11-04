@@ -1,0 +1,32 @@
+<html>
+  <style> body{ font-size:15pt; font-family:arial; } </style>
+<body>
+  <h1>Inventory</h1>
+
+  <form method="get" action="/inventory">
+    <label>Household:</label>
+    <select name="hid" onchange="this.form.submit()">
+      {% for h in households %}
+        <option value="{{h.household_id}}" {{'selected' if sel_hid==h.household_id|string else ''}}>
+          {{h.household_name}}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if items is defined %}
+    <table border="1" cellpadding="4">
+      <tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>
+      {% for it in items %}
+        <tr>
+          <td>{{it.ingredient_name}}</td>
+          <td>{{it.quantity}}</td>
+          <td>{{it.unit}}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+
+  <p><a href="/">Home</a></p>
+</body>
+</html>
