@@ -47,17 +47,19 @@ engine = create_engine(DATABASEURI)
 # Note that this will probably not work if you already have a table named 'test' in your database, containing meaningful data. This is only an example showing you how to run queries in your database using SQLAlchemy.
 #
 with engine.connect() as conn:
-	create_table_command = """
-	CREATE TABLE IF NOT EXISTS test (
-		id serial,
-		name text
-	)
-	"""
-	res = conn.execute(text(create_table_command))
-	insert_table_command = """INSERT INTO test(name) VALUES ('grace hopper'), ('alan turing'), ('ada lovelace')"""
-	res = conn.execute(text(insert_table_command))
-	# you need to commit for create, insert, update queries to reflect
-	conn.commit()
+	# create_table_command = """
+	# CREATE TABLE IF NOT EXISTS test (
+	# 	id serial,
+	# 	name text
+	# )
+	# """
+	# res = conn.execute(text(create_table_command))
+	# insert_table_command = """INSERT INTO test(name) VALUES ('grace hopper'), ('alan turing'), ('ada lovelace')"""
+	# res = conn.execute(text(insert_table_command))
+	# # you need to commit for create, insert, update queries to reflect
+	# conn.commit()
+	result = conn.execute(text("SELECT 1"))
+	print("Database connection OK:", result.fetchone())
 
 
 @app.before_request
@@ -196,6 +198,25 @@ def login():
 	# This code is never executed because of abort().
 	this_is_never_executed()
 
+@app.route('/recipes')
+def recipes():
+    try:
+        cursor = g.conn.execute(text("""
+            SELECT recipe_id, recipe_name, portion_size, source
+            FROM recipe
+            ORDER BY recipe_name
+        """))
+        rows = cursor.fetchall()
+        cursor.close()
+    except Exception as e:
+        return f"<h3>Error querying recipes:</h3><pre>{e}</pre>"
+
+    html = "<h2>Recipes</h2><table border=1 cellpadding=4>"
+    html += "<tr><th>ID</th><th>Name</th><th>Portion</th><th>Source</th></tr>"
+    for r in rows:
+        html += f"<tr><td>{r.recipe_id}</td><td>{r.recipe_name}</td><td>{r.portion_size}</td><td>{r.source}</td></tr>"
+    html += "</table><p><a href='/'>Home</a></p>"
+    return html
 
 if __name__ == "__main__":
 	import click
