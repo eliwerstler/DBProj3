@@ -235,6 +235,37 @@ def households():
     return html
 
 
+@app.route('/inventory')
+def inventory():
+    hid = request.args.get('hid')
+    try:
+        if not hid:
+            cursor = g.conn.execute(text("SELECT household_id, household_name FROM household"))
+            households = cursor.fetchall()
+            cursor.close()
+            html = "<h2>Select a Household</h2><ul>"
+            for h in households:
+                html += f"<li><a href='/inventory?hid={h.household_id}'>{h.household_name}</a></li>"
+            html += "</ul><p><a href='/'>Home</a></p>"
+            return html
+        else:
+            cursor = g.conn.execute(text("""
+                SELECT i.ingredient_name, hi.quantity, hi.unit
+                FROM household_in_inventory_ingredient hi
+                JOIN ingredient i ON i.ingredient_id = hi.ingredient_id
+                WHERE hi.household_id = :hid
+                ORDER BY i.ingredient_name
+            """), {'hid': hid})
+            items = cursor.fetchall()
+            cursor.close()
+            html = "<h2>Inventory</h2><table border=1><tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>"
+            for item in items:
+                html += f"<tr><td>{item.ingredient_name}</td><td>{item.quantity}</td><td>{item.unit}</td></tr>"
+            html += "</table><p><a href='/inventory'>Back</a> | <a href='/'>Home</a></p>"
+            return html
+    except Exception as e:
+        return f"<h3>Error querying inventory:</h3><pre>{e}</pre>"
+
 if __name__ == "__main__":
 	import click
 
