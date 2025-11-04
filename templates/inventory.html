@@ -1,32 +1,68 @@
 <html>
-  <style> body{ font-size:15pt; font-family:arial; } </style>
-<body>
-  <h1>Inventory</h1>
+  <style>
+    body { font-family: Arial; font-size: 14pt; }
+    table { border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; }
+  </style>
 
-  <form method="get" action="/inventory">
-    <label>Household:</label>
-    <select name="hid" onchange="this.form.submit()">
-      {% for h in households %}
-        <option value="{{h.household_id}}" {{'selected' if sel_hid==h.household_id|string else ''}}>
-          {{h.household_name}}
-        </option>
-      {% endfor %}
-    </select>
-  </form>
+  <body>
+    <h1>Inventory</h1>
 
-  {% if items is defined %}
-    <table border="1" cellpadding="4">
-      <tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>
-      {% for it in items %}
-        <tr>
-          <td>{{it.ingredient_name}}</td>
-          <td>{{it.quantity}}</td>
-          <td>{{it.unit}}</td>
-        </tr>
-      {% endfor %}
-    </table>
-  {% endif %}
+    <!-- Household selection -->
+    <form method="get" action="/inventory">
+      <label>Select Household:</label>
+      <select name="hid" onchange="this.form.submit()">
+        {% for h in households %}
+          <option value="{{h.household_id}}" {% if sel_hid == h.household_id|string %}selected{% endif %}>
+            {{h.household_name}}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
 
-  <p><a href="/">Home</a></p>
-</body>
+    {% if items %}
+      <h2>Items for Selected Household</h2>
+      <table>
+        <tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>
+        {% for i in items %}
+          <tr>
+            <td>{{i.ingredient_name}}</td>
+            <td>{{i.quantity}}</td>
+            <td>{{i.unit}}</td>
+          </tr>
+        {% endfor %}
+      </table>
+
+      <h3>Add Ingredient</h3>
+      <form method="post" action="/inventory">
+        <input type="hidden" name="hid" value="{{sel_hid}}">
+        <p>
+          Ingredient:
+          <select name="iid" id="ingredientSelect" onchange="updateUnit()">
+            {% for i in ingredients %}
+              <option value="{{i.ingredient_id}}" data-unit="{{i.unit}}">
+                {{i.ingredient_name}}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+        <p>
+          Quantity: <input type="number" step="0.1" name="quantity" required>
+          Unit: <span id="unitDisplay"></span>
+        </p>
+        <p><input type="submit" value="Add"></p>
+      </form>
+
+      <script>
+        function updateUnit() {
+          const s = document.getElementById('ingredientSelect');
+          const u = s.options[s.selectedIndex].getAttribute('data-unit');
+          document.getElementById('unitDisplay').innerText = u ? u : '';
+        }
+        updateUnit();
+      </script>
+    {% endif %}
+
+    <p><a href="/">Home</a></p>
+  </body>
 </html>

@@ -226,14 +226,38 @@ def households():
 
 
 
-@app.route('/inventory')
+@app.route('/inventory', methods=['GET', 'POST'])
 def inventory():
-    hid = request.args.get('hid')
     try:
+        # Fetch households and ingredients (with their units)
         households = g.conn.execute(text(
             "SELECT household_id, household_name FROM household ORDER BY household_name"
         )).fetchall()
-        sel_hid = hid or (str(households[0].household_id) if households else None)
+        ingredients = g.conn.execute(text(
+            "SELECT ingredient_id, ingredient_name, unit FROM ingredient ORDER BY ingredient_name"
+        )).fetchall()
+
+        sel_hid = request.args.get('hid') or (str(households[0].household_id) if households else None)
+
+        # Handle form submission
+        if request.method == 'POST':
+            hid = request.form.get('hid')
+            iid = request.form.get('iid')
+            qty = request.form.get('quantity')
+
+            if hid and iid and qty:
+                # Automatically apply unit from ingredient table
+                g.conn.execute(text("""
+                    INSERT INTO household_in_inventory_ingredient (household_id, ingredient_id, quantity, unit)
+                    VALUES (:hid, :iid, :qty, (SELECT unit FROM ingredient WHERE ingredient_id = :iid))
+                    ON CONFLICT (household_id, ingredient_id)
+                    DO UPDATE SET quantity = household_in_inventory_ingredient.quantity + EXCLUDED.quantity,
+                                  unit = EXCLUDED.unit
+                """), {'hid': hid, 'iid': iid, 'qty': qty})
+                g.conn.commit()
+                return redirect(f"/inventory?hid={hid}")
+
+        # If household is selected, show its inventory
         items = None
         if sel_hid:
             items = g.conn.execute(text("""
@@ -243,9 +267,15 @@ def inventory():
                 WHERE hi.household_id = :hid
                 ORDER BY i.ingredient_name
             """), {'hid': sel_hid}).fetchall()
+
+        return render_template("inventory.html",
+                               households=households,
+                               ingredients=ingredients,
+                               items=items,
+                               sel_hid=str(sel_hid) if sel_hid else None)
+
     except Exception as e:
         return f"<h3>Error querying inventory:</h3><pre>{e}</pre>"
-    return render_template("inventory.html", households=households, items=items, sel_hid=str(sel_hid) if sel_hid else None)
 
     
 
