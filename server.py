@@ -218,6 +218,23 @@ def recipes():
     html += "</table><p><a href='/'>Home</a></p>"
     return html
 
+
+@app.route('/households')
+def households():
+    try:
+        cursor = g.conn.execute(text("SELECT household_id, household_name FROM household ORDER BY household_name"))
+        data = cursor.fetchall()
+        cursor.close()
+    except Exception as e:
+        return f"<h3>Error querying households:</h3><pre>{e}</pre>"
+
+    html = "<h2>Households</h2><ul>"
+    for h in data:
+        html += f"<li>{h.household_name} (ID: {h.household_id})</li>"
+    html += "</ul><p><a href='/'>Home</a></p>"
+    return html
+
+
 if __name__ == "__main__":
 	import click
 
