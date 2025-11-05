@@ -8,6 +8,9 @@ Go to http://localhost:8111 in your browser.
 A debugger such as "pdb" may be helpful for debugging.
 Read about it online.
 """
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 # accessible as a variable in index.html:
 from sqlalchemy import *
@@ -17,6 +20,11 @@ from urllib.parse import quote_plus
 
 tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask(__name__, template_folder=tmpl_dir)
+
+DATABASE_USER = os.getenv("DATABASE_USER")
+DATABASE_PASS = quote_plus(os.getenv("DATABASE_PASS"))  # safely escape symbols
+DATABASE_HOST = os.getenv("DATABASE_HOST")
+DATABASE_NAME = os.getenv("DATABASE_NAME")
 
 
 #
@@ -31,10 +39,8 @@ app = Flask(__name__, template_folder=tmpl_dir)
 #     DATABASEURI = "postgresql://ab1234:123123@34.139.8.30/proj1part2"
 #
 # Modify these with your own credentials you received from TA!
-DATABASE_USERNAME = "pjm2188"
-DATABASE_PASSWRD = quote_plus("Peterpeter01!")
-DATABASE_HOST = "34.139.8.30"
-DATABASEURI = f"postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWRD}@{DATABASE_HOST}/proj1part2"
+
+DATABASEURI = f"postgresql://{DATABASE_USER}:{DATABASE_PASS}@{DATABASE_HOST}/{DATABASE_NAME}"
 
 
 #
