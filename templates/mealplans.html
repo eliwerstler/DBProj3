@@ -57,6 +57,20 @@
             </ul>
           {% endif %}
 
+          <p><strong>Add Recipe to This Plan:</strong></p>
+          <form method="POST" action="/mealplans" style="margin: 5px 0;">
+            <input type="hidden" name="action" value="add_recipe">
+            <input type="hidden" name="plan_id" value="{{plan.plan_id}}">
+            <input type="hidden" name="hid" value="{{sel_hid}}">
+            <select name="recipe_id" required>
+              <option value="">-- Select Recipe --</option>
+              {% for r in all_recipes %}
+                <option value="{{r.recipe_id}}">{{r.recipe_name}}</option>
+              {% endfor %}
+            </select>
+            <input type="submit" value="Add Recipe">
+          </form>
+
           {% if plan.groceries %}
             <p><strong>Grocery List:</strong></p>
             <table border="1" cellpadding="4">

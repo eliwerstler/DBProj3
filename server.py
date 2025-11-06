@@ -377,6 +377,48 @@ def mealplans():
                     return redirect(f'/mealplans?hid={household_id}')
                 except Exception as e:
                     return f"<h3>Error deleting meal plan:</h3><pre>{e}</pre>"
+        # Check if this is an add recipe to plan request
+        elif request.form.get('action') == 'add_recipe':
+            plan_id = request.form.get('plan_id')
+            recipe_id = request.form.get('recipe_id')
+            household_id = request.form.get('hid')
+            
+            if plan_id and recipe_id:
+                try:
+                    # Check if recipe is already in this plan
+                    existing = g.conn.execute(text("""
+                        SELECT 1 FROM meal_plan_selects_recipe 
+                        WHERE plan_id = :pid AND recipe_id = :rid
+                    """), {'pid': plan_id, 'rid': recipe_id}).fetchone()
+                    
+                    if not existing:
+                        # Link recipe to meal plan
+                        g.conn.execute(text("""
+                            INSERT INTO meal_plan_selects_recipe (plan_id, recipe_id)
+                            VALUES (:pid, :rid)
+                        """), {'pid': plan_id, 'rid': recipe_id})
+                        
+                        # Get grocery list for this plan
+                        grocery = g.conn.execute(text("""
+                            SELECT grocery_id FROM grocery_list WHERE plan_id = :pid
+                        """), {'pid': plan_id}).fetchone()
+                        
+                        if grocery:
+                            grocery_id = grocery[0]
+                            # Add recipe ingredients to grocery list (update quantities if already exists)
+                            g.conn.execute(text("""
+                                INSERT INTO grocery_list_contains_ingredients (grocery_id, ingredient_id, quantity, unit)
+                                SELECT :gid, ingredient_id, quantity, unit
+                                FROM recipe_made_with_ingredient
+                                WHERE recipe_id = :rid
+                                ON CONFLICT (grocery_id, ingredient_id)
+                                DO UPDATE SET quantity = grocery_list_contains_ingredients.quantity + EXCLUDED.quantity
+                            """), {'gid': grocery_id, 'rid': recipe_id})
+                        
+                        g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error adding recipe to plan:</h3><pre>{e}</pre>"
         else:
             # Add new meal plan
             household_id = request.form.get('hid')
