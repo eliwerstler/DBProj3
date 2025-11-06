@@ -3,31 +3,88 @@
 <body>
   <h1>Meal Plans</h1>
 
+  <!-- Household Selection -->
   <form method="get" action="/mealplans">
-    <label>Plan:</label>
-    <select name="pid" onchange="this.form.submit()">
-      <option value="">-- Select a plan --</option>
-      {% for p in plans %}
-        <option value="{{p.plan_id}}" {{'selected' if sel_pid==p.plan_id|string else ''}}>
-          {{p.household_name}} — {{p.label}}
+    <label>Select Household:</label>
+    <select name="hid" onchange="this.form.submit()">
+      {% for h in households %}
+        <option value="{{h.household_id}}" {% if sel_hid == h.household_id|string %}selected{% endif %}>
+          {{h.household_name}}
         </option>
       {% endfor %}
     </select>
   </form>
 
-  {% if recipes %}
-    <h3>Recipes</h3>
-    <ul>{% for r in recipes %}<li>{{r.recipe_name}}</li>{% endfor %}</ul>
-  {% endif %}
+  {% if sel_hid %}
+    <!-- Add New Meal Plan -->
+    <h3>Add New Meal Plan</h3>
+    <form method="POST" action="/mealplans">
+      <input type="hidden" name="hid" value="{{sel_hid}}">
+      <p>
+        Recipe: 
+        <select name="recipe_id" required>
+          <option value="">-- Select Recipe --</option>
+          {% for r in all_recipes %}
+            <option value="{{r.recipe_id}}">{{r.recipe_name}}</option>
+          {% endfor %}
+        </select>
+      </p>
+      <p>Plan Label: <input type="text" name="label" required placeholder="e.g., Week 1, Thanksgiving"></p>
+      <p><input type="submit" value="Add"></p>
+    </form>
 
-  {% if groceries %}
-    <h3>Grocery List</h3>
-    <table border="1" cellpadding="4">
-      <tr><th>Ingredient</th><th>Qty</th><th>Unit</th></tr>
-      {% for g in groceries %}
-        <tr><td>{{g.ingredient_name}}</td><td>{{g.quantity}}</td><td>{{g.unit}}</td></tr>
+    <!-- Display All Meal Plans for Selected Household -->
+    <h3>Meal Plans for Selected Household</h3>
+    {% if plan_details %}
+      {% for plan in plan_details %}
+        <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="margin: 0;">{{plan.label}}</h4>
+            <form method="POST" action="/mealplans" style="display:inline; margin: 0;" onsubmit="return confirm('Are you sure you want to delete this meal plan?');">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="plan_id" value="{{plan.plan_id}}">
+              <input type="hidden" name="hid" value="{{sel_hid}}">
+              <input type="submit" value="Delete">
+            </form>
+          </div>
+          
+          {% if plan.recipes %}
+            <p><strong>Recipes:</strong></p>
+            <ul>
+              {% for r in plan.recipes %}
+                <li>{{r.recipe_name}}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          <p><strong>Add Recipe to This Plan:</strong></p>
+          <form method="POST" action="/mealplans" style="margin: 5px 0;">
+            <input type="hidden" name="action" value="add_recipe">
+            <input type="hidden" name="plan_id" value="{{plan.plan_id}}">
+            <input type="hidden" name="hid" value="{{sel_hid}}">
+            <select name="recipe_id" required>
+              <option value="">-- Select Recipe --</option>
+              {% for r in all_recipes %}
+                <option value="{{r.recipe_id}}">{{r.recipe_name}}</option>
+              {% endfor %}
+            </select>
+            <input type="submit" value="Add Recipe">
+          </form>
+
+          {% if plan.groceries %}
+            <p><strong>Grocery List:</strong></p>
+            <table border="1" cellpadding="4">
+              <tr><th>Ingredient</th><th>Qty</th><th>Unit</th></tr>
+              {% for g in plan.groceries %}
+                <tr><td>{{g.ingredient_name}}</td><td>{{g.quantity}}</td><td>{{g.unit}}</td></tr>
+              {% endfor %}
+            </table>
+          {% endif %}
+        </div>
       {% endfor %}
-    </table>
+    {% else %}
+      <p><i>No meal plans yet for this household.</i></p>
+    {% endif %}
   {% endif %}
 
   <p><a href="/">Home</a></p>

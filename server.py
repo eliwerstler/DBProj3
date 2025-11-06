@@ -8,6 +8,9 @@ Go to http://localhost:8111 in your browser.
 A debugger such as "pdb" may be helpful for debugging.
 Read about it online.
 """
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 # accessible as a variable in index.html:
 from sqlalchemy import *
@@ -17,6 +20,11 @@ from urllib.parse import quote_plus
 
 tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask(__name__, template_folder=tmpl_dir)
+
+DATABASE_USER = os.getenv("DATABASE_USER")
+DATABASE_PASS = quote_plus(os.getenv("DATABASE_PASS"))  # safely escape symbols
+DATABASE_HOST = os.getenv("DATABASE_HOST")
+DATABASE_NAME = os.getenv("DATABASE_NAME")
 
 
 #
@@ -31,10 +39,8 @@ app = Flask(__name__, template_folder=tmpl_dir)
 #     DATABASEURI = "postgresql://ab1234:123123@34.139.8.30/proj1part2"
 #
 # Modify these with your own credentials you received from TA!
-DATABASE_USERNAME = "pjm2188"
-DATABASE_PASSWRD = quote_plus("Peterpeter01!")
-DATABASE_HOST = "34.139.8.30"
-DATABASEURI = f"postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWRD}@{DATABASE_HOST}/proj1part2"
+
+DATABASEURI = f"postgresql://{DATABASE_USER}:{DATABASE_PASS}@{DATABASE_HOST}/{DATABASE_NAME}"
 
 
 #
@@ -214,8 +220,37 @@ def recipes():
 
 
 
-@app.route('/households')
+@app.route('/households',methods=['GET', 'POST'])
 def households():
+    # Handle POST
+    if request.method == 'POST':
+        # Check if this is a delete request
+        if request.form.get('action') == 'delete':
+            household_id = request.form.get('household_id')
+            if household_id:
+                try:
+                    g.conn.execute(text("""
+                        DELETE FROM household WHERE household_id = :hid
+                    """), {'hid': household_id})
+                    g.conn.commit()
+                    return redirect('/households')
+                except Exception as e:
+                    return f"<h3>Error deleting household:</h3><pre>{e}</pre>"
+        else:
+            # Add new household
+            household_name = request.form.get('household_name')
+            if household_name:
+                try:
+                    g.conn.execute(text("""
+                        INSERT INTO household (household_name) 
+                        VALUES (:name)
+                    """), {'name': household_name})
+                    g.conn.commit()
+                    return redirect('/households')
+                except Exception as e:
+                    return f"<h3>Error adding household:</h3><pre>{e}</pre>"
+    
+    # Handle GET - Display households
     try:
         cursor = g.conn.execute(text("SELECT household_id, household_name FROM household ORDER BY household_name"))
         data = cursor.fetchall()
@@ -307,18 +342,166 @@ def cookable():
 
 
 
-@app.route('/mealplans')
+@app.route('/mealplans', methods=['GET', 'POST'])
 def mealplans():
+    # Handle POST
+    if request.method == 'POST':
+        # Check if this is a delete request
+        if request.form.get('action') == 'delete':
+            plan_id = request.form.get('plan_id')
+            household_id = request.form.get('hid')
+            if plan_id:
+                try:
+                    # Delete grocery list ingredients first
+                    g.conn.execute(text("""
+                        DELETE FROM grocery_list_contains_ingredients
+                        WHERE grocery_id IN (SELECT grocery_id FROM grocery_list WHERE plan_id = :pid)
+                    """), {'pid': plan_id})
+                    
+                    # Delete grocery list
+                    g.conn.execute(text("""
+                        DELETE FROM grocery_list WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    # Delete meal plan recipe links
+                    g.conn.execute(text("""
+                        DELETE FROM meal_plan_selects_recipe WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    # Delete meal plan
+                    g.conn.execute(text("""
+                        DELETE FROM meal_plans WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error deleting meal plan:</h3><pre>{e}</pre>"
+        # Check if this is an add recipe to plan request
+        elif request.form.get('action') == 'add_recipe':
+            plan_id = request.form.get('plan_id')
+            recipe_id = request.form.get('recipe_id')
+            household_id = request.form.get('hid')
+            
+            if plan_id and recipe_id:
+                try:
+                    # Check if recipe is already in this plan
+                    existing = g.conn.execute(text("""
+                        SELECT 1 FROM meal_plan_selects_recipe 
+                        WHERE plan_id = :pid AND recipe_id = :rid
+                    """), {'pid': plan_id, 'rid': recipe_id}).fetchone()
+                    
+                    if not existing:
+                        # Link recipe to meal plan
+                        g.conn.execute(text("""
+                            INSERT INTO meal_plan_selects_recipe (plan_id, recipe_id)
+                            VALUES (:pid, :rid)
+                        """), {'pid': plan_id, 'rid': recipe_id})
+                        
+                        # Get grocery list for this plan
+                        grocery = g.conn.execute(text("""
+                            SELECT grocery_id FROM grocery_list WHERE plan_id = :pid
+                        """), {'pid': plan_id}).fetchone()
+                        
+                        if grocery:
+                            grocery_id = grocery[0]
+                            # Add recipe ingredients to grocery list (update quantities if already exists)
+                            g.conn.execute(text("""
+                                INSERT INTO grocery_list_contains_ingredients (grocery_id, ingredient_id, quantity, unit)
+                                SELECT :gid, ingredient_id, quantity, unit
+                                FROM recipe_made_with_ingredient
+                                WHERE recipe_id = :rid
+                                ON CONFLICT (grocery_id, ingredient_id)
+                                DO UPDATE SET quantity = grocery_list_contains_ingredients.quantity + EXCLUDED.quantity
+                            """), {'gid': grocery_id, 'rid': recipe_id})
+                        
+                        g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error adding recipe to plan:</h3><pre>{e}</pre>"
+        else:
+            # Add new meal plan
+            household_id = request.form.get('hid')
+            recipe_id = request.form.get('recipe_id')
+            label = request.form.get('label')
+            
+            if household_id and recipe_id and label:
+                try:
+                    # Insert meal plan
+                    result = g.conn.execute(text("""
+                        INSERT INTO meal_plans (household_id, label) 
+                        VALUES (:hid, :label)
+                        RETURNING plan_id
+                    """), {'hid': household_id, 'label': label})
+                    plan_id = result.fetchone()[0]
+                    
+                    # Link recipe to meal plan
+                    g.conn.execute(text("""
+                        INSERT INTO meal_plan_selects_recipe (plan_id, recipe_id)
+                        VALUES (:pid, :rid)
+                    """), {'pid': plan_id, 'rid': recipe_id})
+                    
+                    # Create grocery list
+                    result = g.conn.execute(text("""
+                        INSERT INTO grocery_list (plan_id)
+                        VALUES (:pid)
+                        RETURNING grocery_id
+                    """), {'pid': plan_id})
+                    grocery_id = result.fetchone()[0]
+                    
+                    # Add recipe ingredients to grocery list
+                    g.conn.execute(text("""
+                        INSERT INTO grocery_list_contains_ingredients (grocery_id, ingredient_id, quantity, unit)
+                        SELECT :gid, ingredient_id, quantity, unit
+                        FROM recipe_made_with_ingredient
+                        WHERE recipe_id = :rid
+                    """), {'gid': grocery_id, 'rid': recipe_id})
+                    
+                    g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error adding meal plan:</h3><pre>{e}</pre>"
+    
+    # Handle GET - Display meal plans
     try:
-        plans = g.conn.execute(text("""
-            SELECT mp.plan_id, h.household_name, mp.label
-            FROM meal_plans mp
-            JOIN household h ON h.household_id = mp.household_id
-            ORDER BY h.household_name, mp.label
+        # Fetch households
+        households = g.conn.execute(text("""
+            SELECT household_id, household_name 
+            FROM household 
+            ORDER BY household_name
         """)).fetchall()
-        sel_pid = request.args.get("pid")
-        groceries = recipes = []
-        if sel_pid:
+        
+        # Get selected household
+        sel_hid = request.args.get('hid', str(households[0].household_id) if households else None)
+        
+        # Fetch recipes for the add form
+        all_recipes = g.conn.execute(text("""
+            SELECT recipe_id, recipe_name
+            FROM recipe
+            ORDER BY recipe_name
+        """)).fetchall()
+        
+        # Fetch meal plans for selected household
+        plans = []
+        if sel_hid:
+            plans = g.conn.execute(text("""
+                SELECT mp.plan_id, mp.label
+                FROM meal_plans mp
+                WHERE mp.household_id = :hid
+                ORDER BY mp.label
+            """), {'hid': sel_hid}).fetchall()
+        
+        # Get details for each plan
+        plan_details = []
+        for plan in plans:
+            recipes = g.conn.execute(text("""
+                SELECT r.recipe_name
+                FROM meal_plan_selects_recipe mpsr
+                JOIN recipe r ON r.recipe_id = mpsr.recipe_id
+                WHERE mpsr.plan_id = :pid
+                ORDER BY r.recipe_name
+            """), {'pid': plan.plan_id}).fetchall()
+            
             groceries = g.conn.execute(text("""
                 SELECT i.ingredient_name, gci.quantity, gci.unit
                 FROM grocery_list gl
@@ -326,17 +509,23 @@ def mealplans():
                 JOIN ingredient i ON i.ingredient_id = gci.ingredient_id
                 WHERE gl.plan_id = :pid
                 ORDER BY i.ingredient_name
-            """), {'pid': sel_pid}).fetchall()
-            recipes = g.conn.execute(text("""
-                SELECT r.recipe_name
-                FROM meal_plan_selects_recipe mpsr
-                JOIN recipe r ON r.recipe_id = mpsr.recipe_id
-                WHERE mpsr.plan_id = :pid
-                ORDER BY r.recipe_name
-            """), {'pid': sel_pid}).fetchall()
+            """), {'pid': plan.plan_id}).fetchall()
+            
+            plan_details.append({
+                'plan_id': plan.plan_id,
+                'label': plan.label,
+                'recipes': recipes,
+                'groceries': groceries
+            })
+            
     except Exception as e:
         return f"<h3>Error querying meal plans:</h3><pre>{e}</pre>"
-    return render_template("mealplans.html", plans=plans, groceries=groceries, recipes=recipes, sel_pid=str(sel_pid) if sel_pid else None)
+    
+    return render_template("mealplans.html", 
+                         households=households, 
+                         sel_hid=str(sel_hid) if sel_hid else None,
+                         all_recipes=all_recipes,
+                         plan_details=plan_details)
 
 
 

@@ -4,7 +4,7 @@
   <h1>Cookable Recipes</h1>
 
   <form method="get" action="/cookable">
-    <label>Household:</label>
+    <label>Select Household:</label>
     <select name="hid" onchange="this.form.submit()">
       {% for h in households %}
         <option value="{{h.household_id}}" {{'selected' if sel_hid==h.household_id|string else ''}}>
@@ -14,12 +14,19 @@
     </select>
   </form>
 
-  <table border="1" cellpadding="4">
-    <tr><th>Recipe</th><th>Portion</th></tr>
-    {% for r in rows %}
-      <tr><td>{{r.recipe_name}}</td><td>{{r.portion_size}}</td></tr>
-    {% endfor %}
-  </table>
+  {% if sel_hid %}
+    <h3>Recipes cookable with current inventory:</h3>
+    {% if rows %}
+      <table border="1" cellpadding="4">
+        <tr><th>Recipe</th><th>Portion</th></tr>
+        {% for r in rows %}
+          <tr><td>{{r.recipe_name}}</td><td>{{r.portion_size}}</td></tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p><i>No recipes can be made with current inventory. Add more ingredients to your inventory!</i></p>
+    {% endif %}
+  {% endif %}
 
   <p><a href="/">Home</a></p>
 </body>

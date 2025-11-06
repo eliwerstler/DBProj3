@@ -3,10 +3,9 @@
 <body>
   <h1>Recipes</h1>
   <table border="1" cellpadding="4">
-    <tr><th>ID</th><th>Name</th><th>Portion</th><th>Source</th></tr>
+    <tr><th>Name</th><th>Portion</th><th>Source</th></tr>
     {% for r in rows %}
       <tr>
-        <td>{{r.recipe_id}}</td>
         <td>{{r.recipe_name}}</td>
         <td>{{r.portion_size}}</td>
         <td>{{r.source}}</td>
