@@ -61,7 +61,7 @@ Users interact by:
 5. Grocery list updates in real-time with aggregated quantities
 6. Users can delete plans, which cascades to remove all related data
 
-Running the applciation: 
+Running the application: 
 
 1. Select the desired PostgreSQL database
 2. Set up environment variables in `.env` file:
