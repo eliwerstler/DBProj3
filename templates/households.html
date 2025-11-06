@@ -2,11 +2,31 @@
   <style> body{ font-size:15pt; font-family:arial; } </style>
 <body>
   <h1>Households</h1>
-  <ul>
+  
+  <h3>Add New Household</h3>
+  <form method="POST" action="/households">
+    <p>Name: <input type="text" name="household_name" required></p>
+    <p><input type="submit" value="Add"></p>
+  </form>
+
+  <h3>Existing Households</h3>
+  <table border="1" cellpadding="4">
+    <tr><th>ID</th><th>Name</th><th>Action</th></tr>
     {% for h in households %}
-      <li>{{h.household_name}} (ID: {{h.household_id}})</li>
+      <tr>
+        <td>{{h.household_id}}</td>
+        <td>{{h.household_name}}</td>
+        <td>
+          <form method="POST" action="/households" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this household?');">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="household_id" value="{{h.household_id}}">
+            <input type="submit" value="Delete">
+          </form>
+        </td>
+      </tr>
     {% endfor %}
-  </ul>
+  </table>
+
   <p><a href="/">Home</a></p>
 </body>
 </html>

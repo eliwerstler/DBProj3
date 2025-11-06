@@ -220,8 +220,37 @@ def recipes():
 
 
 
-@app.route('/households')
+@app.route('/households',methods=['GET', 'POST'])
 def households():
+    # Handle POST
+    if request.method == 'POST':
+        # Check if this is a delete request
+        if request.form.get('action') == 'delete':
+            household_id = request.form.get('household_id')
+            if household_id:
+                try:
+                    g.conn.execute(text("""
+                        DELETE FROM household WHERE household_id = :hid
+                    """), {'hid': household_id})
+                    g.conn.commit()
+                    return redirect('/households')
+                except Exception as e:
+                    return f"<h3>Error deleting household:</h3><pre>{e}</pre>"
+        else:
+            # Add new household
+            household_name = request.form.get('household_name')
+            if household_name:
+                try:
+                    g.conn.execute(text("""
+                        INSERT INTO household (household_name) 
+                        VALUES (:name)
+                    """), {'name': household_name})
+                    g.conn.commit()
+                    return redirect('/households')
+                except Exception as e:
+                    return f"<h3>Error adding household:</h3><pre>{e}</pre>"
+    
+    # Handle GET - Display households
     try:
         cursor = g.conn.execute(text("SELECT household_id, household_name FROM household ORDER BY household_name"))
         data = cursor.fetchall()

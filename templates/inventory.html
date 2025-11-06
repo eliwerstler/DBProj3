@@ -20,18 +20,22 @@
       </select>
     </form>
 
-    {% if items %}
-      <h2>Items for Selected Household</h2>
-      <table>
-        <tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>
-        {% for i in items %}
-          <tr>
-            <td>{{i.ingredient_name}}</td>
-            <td>{{i.quantity}}</td>
-            <td>{{i.unit}}</td>
-          </tr>
-        {% endfor %}
-      </table>
+    {% if sel_hid %}
+      {% if items %}
+        <h2>Items for Selected Household</h2>
+        <table>
+          <tr><th>Ingredient</th><th>Quantity</th><th>Unit</th></tr>
+          {% for i in items %}
+            <tr>
+              <td>{{i.ingredient_name}}</td>
+              <td>{{i.quantity}}</td>
+              <td>{{i.unit}}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <p><i>No items in inventory yet.</i></p>
+      {% endif %}
 
       <h3>Add Ingredient</h3>
       <form method="post" action="/inventory">
