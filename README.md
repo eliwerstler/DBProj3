@@ -6,7 +6,7 @@ Account: pjm2188
 This is the same database used for Part 2. 
 
 ## Web Application URL
-URL:
+URL: http://34.75.63.22:8111/
 
 ## Implemented Features
 
