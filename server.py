@@ -342,18 +342,124 @@ def cookable():
 
 
 
-@app.route('/mealplans')
+@app.route('/mealplans', methods=['GET', 'POST'])
 def mealplans():
+    # Handle POST
+    if request.method == 'POST':
+        # Check if this is a delete request
+        if request.form.get('action') == 'delete':
+            plan_id = request.form.get('plan_id')
+            household_id = request.form.get('hid')
+            if plan_id:
+                try:
+                    # Delete grocery list ingredients first
+                    g.conn.execute(text("""
+                        DELETE FROM grocery_list_contains_ingredients
+                        WHERE grocery_id IN (SELECT grocery_id FROM grocery_list WHERE plan_id = :pid)
+                    """), {'pid': plan_id})
+                    
+                    # Delete grocery list
+                    g.conn.execute(text("""
+                        DELETE FROM grocery_list WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    # Delete meal plan recipe links
+                    g.conn.execute(text("""
+                        DELETE FROM meal_plan_selects_recipe WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    # Delete meal plan
+                    g.conn.execute(text("""
+                        DELETE FROM meal_plans WHERE plan_id = :pid
+                    """), {'pid': plan_id})
+                    
+                    g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error deleting meal plan:</h3><pre>{e}</pre>"
+        else:
+            # Add new meal plan
+            household_id = request.form.get('hid')
+            recipe_id = request.form.get('recipe_id')
+            label = request.form.get('label')
+            
+            if household_id and recipe_id and label:
+                try:
+                    # Insert meal plan
+                    result = g.conn.execute(text("""
+                        INSERT INTO meal_plans (household_id, label) 
+                        VALUES (:hid, :label)
+                        RETURNING plan_id
+                    """), {'hid': household_id, 'label': label})
+                    plan_id = result.fetchone()[0]
+                    
+                    # Link recipe to meal plan
+                    g.conn.execute(text("""
+                        INSERT INTO meal_plan_selects_recipe (plan_id, recipe_id)
+                        VALUES (:pid, :rid)
+                    """), {'pid': plan_id, 'rid': recipe_id})
+                    
+                    # Create grocery list
+                    result = g.conn.execute(text("""
+                        INSERT INTO grocery_list (plan_id)
+                        VALUES (:pid)
+                        RETURNING grocery_id
+                    """), {'pid': plan_id})
+                    grocery_id = result.fetchone()[0]
+                    
+                    # Add recipe ingredients to grocery list
+                    g.conn.execute(text("""
+                        INSERT INTO grocery_list_contains_ingredients (grocery_id, ingredient_id, quantity, unit)
+                        SELECT :gid, ingredient_id, quantity, unit
+                        FROM recipe_made_with_ingredient
+                        WHERE recipe_id = :rid
+                    """), {'gid': grocery_id, 'rid': recipe_id})
+                    
+                    g.conn.commit()
+                    return redirect(f'/mealplans?hid={household_id}')
+                except Exception as e:
+                    return f"<h3>Error adding meal plan:</h3><pre>{e}</pre>"
+    
+    # Handle GET - Display meal plans
     try:
-        plans = g.conn.execute(text("""
-            SELECT mp.plan_id, h.household_name, mp.label
-            FROM meal_plans mp
-            JOIN household h ON h.household_id = mp.household_id
-            ORDER BY h.household_name, mp.label
+        # Fetch households
+        households = g.conn.execute(text("""
+            SELECT household_id, household_name 
+            FROM household 
+            ORDER BY household_name
         """)).fetchall()
-        sel_pid = request.args.get("pid")
-        groceries = recipes = []
-        if sel_pid:
+        
+        # Get selected household
+        sel_hid = request.args.get('hid', str(households[0].household_id) if households else None)
+        
+        # Fetch recipes for the add form
+        all_recipes = g.conn.execute(text("""
+            SELECT recipe_id, recipe_name
+            FROM recipe
+            ORDER BY recipe_name
+        """)).fetchall()
+        
+        # Fetch meal plans for selected household
+        plans = []
+        if sel_hid:
+            plans = g.conn.execute(text("""
+                SELECT mp.plan_id, mp.label
+                FROM meal_plans mp
+                WHERE mp.household_id = :hid
+                ORDER BY mp.label
+            """), {'hid': sel_hid}).fetchall()
+        
+        # Get details for each plan
+        plan_details = []
+        for plan in plans:
+            recipes = g.conn.execute(text("""
+                SELECT r.recipe_name
+                FROM meal_plan_selects_recipe mpsr
+                JOIN recipe r ON r.recipe_id = mpsr.recipe_id
+                WHERE mpsr.plan_id = :pid
+                ORDER BY r.recipe_name
+            """), {'pid': plan.plan_id}).fetchall()
+            
             groceries = g.conn.execute(text("""
                 SELECT i.ingredient_name, gci.quantity, gci.unit
                 FROM grocery_list gl
@@ -361,17 +467,23 @@ def mealplans():
                 JOIN ingredient i ON i.ingredient_id = gci.ingredient_id
                 WHERE gl.plan_id = :pid
                 ORDER BY i.ingredient_name
-            """), {'pid': sel_pid}).fetchall()
-            recipes = g.conn.execute(text("""
-                SELECT r.recipe_name
-                FROM meal_plan_selects_recipe mpsr
-                JOIN recipe r ON r.recipe_id = mpsr.recipe_id
-                WHERE mpsr.plan_id = :pid
-                ORDER BY r.recipe_name
-            """), {'pid': sel_pid}).fetchall()
+            """), {'pid': plan.plan_id}).fetchall()
+            
+            plan_details.append({
+                'plan_id': plan.plan_id,
+                'label': plan.label,
+                'recipes': recipes,
+                'groceries': groceries
+            })
+            
     except Exception as e:
         return f"<h3>Error querying meal plans:</h3><pre>{e}</pre>"
-    return render_template("mealplans.html", plans=plans, groceries=groceries, recipes=recipes, sel_pid=str(sel_pid) if sel_pid else None)
+    
+    return render_template("mealplans.html", 
+                         households=households, 
+                         sel_hid=str(sel_hid) if sel_hid else None,
+                         all_recipes=all_recipes,
+                         plan_details=plan_details)
 
 
 
