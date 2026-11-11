@@ -1,12 +1,7 @@
 # Recipe Database Web Application
 
-## PostgreSQL Account
-Account: pjm2188
-
-This is the same database used for Part 2. 
-
-## Web Application URL
-URL: http://34.75.63.22:8111/
+## Setup
+Copy `.env.example` to `.env`, fill in your PostgreSQL credentials, then `pip install -r requirements.txt` and `python server.py`.
 
 ## Implemented Features
 
